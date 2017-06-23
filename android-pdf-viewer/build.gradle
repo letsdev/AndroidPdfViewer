@@ -1,12 +1,18 @@
 apply plugin: 'com.android.library'
+apply plugin: 'maven'
+apply plugin: 'net.researchgate.release'
+
+def publishedGroupIdVar = 'com.github.barteksc'
+def libraryNameVar = 'AndroidPdfViewer'
+def artifactVar = 'android-pdf-viewer'
 
 ext {
     bintrayRepo = 'maven'
     bintrayName = 'android-pdf-viewer'
 
-    publishedGroupId = 'com.github.barteksc'
-    libraryName = 'AndroidPdfViewer'
-    artifact = 'android-pdf-viewer'
+    publishedGroupId = publishedGroupIdVar
+    libraryName = libraryNameVar
+    artifact = artifactVar
 
     libraryDescription = 'Android view for displaying PDFs rendered with PdfiumAndroid'
 
@@ -26,15 +32,63 @@ ext {
 
 android {
     compileSdkVersion 25
-    buildToolsVersion '25.0.2'
+    buildToolsVersion '25.0.3'
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_7
+        targetCompatibility JavaVersion.VERSION_1_7
+    }
+
+    lintOptions {
+        abortOnError false
+    }
 
     defaultConfig {
         minSdkVersion 11
         targetSdkVersion 25
-        versionCode 1
+        versionCode System.getenv("BUILD_NUMBER") as Integer ?: 0
         versionName "2.5.1"
     }
 
+    def getMavenSettingsCredentials = {
+        String userHome = System.getProperty("user.home");
+        File mavenSettings = new File(userHome, ".m2/settings.xml")
+        def xmlSlurper = new XmlSlurper()
+        def output = xmlSlurper.parse(mavenSettings)
+        return output."servers"."server"
+    }
+
+    def getCredentials = {
+        def entries = getMavenSettingsCredentials()
+        for (entry in entries) {
+            return [username: entry.username.text(), password: entry.password.text()]
+        }
+    }
+
+    def localRepositoryPath = System.getProperty('user.home') + '/.m2/repository/com/github/barteksc/android-pdf-viewer'
+
+    uploadArchives {
+        if (debug == 'true') {
+            repositories {
+                flatDir {
+                    dir localRepositoryPath
+                }
+            }
+        } else {
+            def creds = getCredentials()
+            repositories {
+                mavenDeployer {
+                    repository(url: "http://dev2/nexus/repository/ld-third-party-releases/") {
+                        authentication(userName: creds["username"], password: creds["password"])
+                    }
+
+                    pom.version = android.defaultConfig.versionName
+                    pom.artifactId = artifactVar
+                    pom.groupId = publishedGroupIdVar
+                }
+            }
+        }
+    }
 }
 
 dependencies {
